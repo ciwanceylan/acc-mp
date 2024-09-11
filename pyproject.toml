@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "accmp"
+version = "0.0.1"
+authors = [
+  { name="Ciwan Ceylan", email="ciwan@kth.se" },
+]
+description = "A library for the ACC node embedding model."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/ciwanceylan/acc-mp"
+Issues = "https://github.com/ciwanceylan/mp/issues"

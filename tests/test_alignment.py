@@ -7,11 +7,8 @@ from sklearn.decomposition import PCA
 
 import accmp.acc as acc
 import accmp.pcapass as pcapass
-# import unstructnes.aggcap.agg_cat_prune as aggcatprune
 import accmp.transforms
 import accmp.preprocessing as preproc
-# import unstructnes.aggcap.utils as aggcap_utils
-# from unstructnes.aggcap.feature_pruning.pruning import PRUNING_METHODS
 
 
 from tests.alignment import load_alignment_problem, eval_topk_sim
