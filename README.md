@@ -3,6 +3,14 @@
 This is code for the ACC node embedding model, described in the paper "Full-Rank Unsupervised Node Embeddings for Directed
 Graphs via Message Aggregation" (under review for TMLR 2024).
 
+## Overview
+
+The function for calling ACC is located in [src/accmp/acc.py](src/accmp/acc.py), and the PCAPass function in [src/accmp/pcapass.py](src/accmp/pcapass.py). 
+The models and their forward passes are defined in [src/accmp/models.py](src/accmp/models.py).
+
+Currently, some aspects of the library are a bit to verbose due to early ACC version testing. 
+This includes the specification of the initial inputs and feature normalization (which is only used for centring for ACC.)
+
 ## Installation
 
 Clone the repo and then install ot into your environment using pip:
@@ -49,7 +57,7 @@ params = acc.ACCParams(
     max_steps=8,
     max_dim=64,
     initial_feature_standardization=accmp.transforms.FeatureNormalization(mode='std', subtract_mean=True),
-    mp_feature_normalization=accmp.transforms.FeatureNormalization(mode=None, subtract_mean=False),
+    mp_feature_normalization=accmp.transforms.FeatureNormalization(mode=None, subtract_mean=True),
     init_params=preproc.InitFeaturesWeightsParams(use_weights=False, use_node_attributes=False,
         as_undirected=True, use_degree=True, use_lcc=True, use_log1p_degree=False, dtype=np.float32),
 )

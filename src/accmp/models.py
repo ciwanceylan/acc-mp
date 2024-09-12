@@ -12,7 +12,7 @@ def vprint(s: str, verbose: bool):
         print(s)
 
 
-class AggSVDCat(torch.nn.Module):
+class ACC(torch.nn.Module):
     agg_step: MsgAggStep
 
     def __init__(
@@ -25,8 +25,8 @@ class AggSVDCat(torch.nn.Module):
             mp_feature_normalization: FeatureNormalization,
             return_us: bool = False,
             use_rsvd: bool = False,
-            sv_prune: feat_prune.SV_THRESHOLDING,
-            sv_tol: float = 0.0,
+            sv_thresholding: feat_prune.SV_THRESHOLDING,
+            theta: float = 0.0,
             decomposed_layers: int = 1,
             verbose: bool = False
     ):
@@ -38,7 +38,7 @@ class AggSVDCat(torch.nn.Module):
         )
         self.feat_norm = mp_feature_normalization
         self.base_transform = initial_feature_standardization
-        self.compressor = feat_prune.ACCCompressor(return_us=return_us, sv_prune=sv_prune, sv_tol=sv_tol,
+        self.compressor = feat_prune.ACCCompressor(return_us=return_us, sv_thresholding=sv_thresholding, theta=theta,
                                                    use_rsvd=use_rsvd)
         self.max_dim = max_dim
         self.min_add_dim = min_add_dim
@@ -97,8 +97,8 @@ class PCAPass(torch.nn.Module):
             initial_feature_standardization: FeatureNormalization,
             mp_feature_normalization: FeatureNormalization,
             mp_instance_normalization: FeatureNormalization,
-            sv_prune: feat_prune.SV_THRESHOLDING,
-            sv_tol: float = 0.0,
+            sv_thresholding: feat_prune.SV_THRESHOLDING,
+            theta: float = 0.0,
             return_us: bool = False,
             use_rsvd: bool = False,
             decomposed_layers: int = 1
@@ -107,7 +107,7 @@ class PCAPass(torch.nn.Module):
 
         self.acp_step = ConcatMP(
             use_dir_conv=use_dir_conv,
-            compressor=feat_prune.PCAPassCompressor(sv_prune=sv_prune, sv_tol=sv_tol, max_dim=max_dim,
+            compressor=feat_prune.PCAPassCompressor(sv_thresholding=sv_thresholding, theta=theta, max_dim=max_dim,
                                                     return_us=return_us, use_rsvd=use_rsvd),
             feature_normalization=mp_feature_normalization,
             instance_normalization=mp_instance_normalization,

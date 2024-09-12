@@ -16,8 +16,8 @@ class ACCParams:
     mp_feature_normalization: FeatureNormalization
     init_params: preproc.InitFeaturesWeightsParams
     min_add_dim: int = 2
-    sv_prune: comprs.SV_THRESHOLDING = 'rtol'
-    sv_tol: float = 1e-8
+    sv_thresholding: comprs.SV_THRESHOLDING = 'rtol'
+    theta: float = 1e-8
     return_us: bool = False
     use_rsvd: bool = False
     normalized_weights: bool = True
@@ -28,7 +28,7 @@ def agg_compress_cat_embeddings(edge_index: np.ndarray, num_nodes: int, directed
                                 params: ACCParams, device: torch.device,
                                 weights: np.ndarray = None, node_attributes: np.ndarray = None,
                                 return_np: bool = True, verbose: bool = False):
-    model = aggcap_models.AggSVDCat(
+    model = aggcap_models.ACC(
         use_dir_conv=directed_conv,
         max_dim=params.max_dim,
         min_add_dim=params.min_add_dim,
@@ -36,8 +36,8 @@ def agg_compress_cat_embeddings(edge_index: np.ndarray, num_nodes: int, directed
         initial_feature_standardization=params.initial_feature_standardization,
         return_us=params.return_us,
         use_rsvd=params.use_rsvd,
-        sv_prune=params.sv_prune,
-        sv_tol=params.sv_tol,
+        sv_thresholding=params.sv_thresholding,
+        theta=params.theta,
         decomposed_layers=params.decomposed_layers,
         verbose=verbose
     )
@@ -64,7 +64,7 @@ def agg_compress_cat_embeddings(edge_index: np.ndarray, num_nodes: int, directed
         )
 
     if verbose:
-        print("Calling AggSVDCat model...")
+        print("Calling ACC model...")
     embeddings = model(
         initial_features.to(device),
         adj_ws2t_t=adj_ws2t_t.to(device),

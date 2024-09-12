@@ -17,9 +17,8 @@ class PCAPassParams:
     mp_feature_normalization: FeatureNormalization
     mp_instance_normalization: FeatureNormalization
     init_params: InitFeaturesWeightsParams
-    return_us: bool
-    sv_prune: comprs.SV_THRESHOLDING = 'none'
-    sv_tol: float = 0.0
+    sv_thresholding: comprs.SV_THRESHOLDING = 'none'
+    theta: float = 0.0
     return_us: bool = False
     use_rsvd: bool = False
     normalized_weights: bool = True
@@ -36,8 +35,8 @@ def pcapass_embeddings(edge_index: np.ndarray, num_nodes: int, directed_conv: bo
         mp_feature_normalization=params.mp_feature_normalization,
         mp_instance_normalization=params.mp_instance_normalization,
         return_us=params.return_us,
-        sv_prune=params.sv_prune,
-        sv_tol=params.sv_tol,
+        sv_thresholding=params.sv_thresholding,
+        theta=params.theta,
         use_rsvd=params.use_rsvd,
         decomposed_layers=params.decomposed_layers,
     )

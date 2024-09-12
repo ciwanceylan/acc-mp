@@ -30,34 +30,34 @@ class VariableCompressor(abc.ABC):
         pass
 
 
-def _get_sv_threshold(sv_prune: SV_THRESHOLDING, tol: float,
+def _get_sv_threshold(sv_thresholding: SV_THRESHOLDING, tol: float,
                       singular_values: torch.Tensor, features: torch.Tensor):
-    if sv_prune == 'rank':
+    if sv_thresholding == 'rank':
         sv_max = singular_values.max()
         sv_threshold = sv_max * max(*features.shape) * torch.finfo(features.dtype).eps
-    elif sv_prune == 'rtol':
+    elif sv_thresholding == 'rtol':
         sv_max = singular_values.max()
         sv_threshold = tol * sv_max
-    elif sv_prune == 'tol':
+    elif sv_thresholding == 'tol':
         sv_threshold = tol
-    elif sv_prune == 'stwhp':
+    elif sv_thresholding == 'stwhp':
         sv_max = singular_values.max()
         sv_threshold = sv_max * 0.5 * np.sqrt(features.shape[0] + features.shape[1] + 1.) * torch.finfo(
             features.dtype).eps
-    elif sv_prune == 'none':
+    elif sv_thresholding == 'none':
         sv_threshold = -1.
     else:
-        raise NotImplementedError(f"Singular value threshold '{sv_prune}' not implemented.")
+        raise NotImplementedError(f"Singular value threshold '{sv_thresholding}' not implemented.")
     return sv_threshold
 
 
 class ACCCompressor(VariableCompressor):
 
-    def __init__(self, sv_prune: SV_THRESHOLDING = 'none', sv_tol: float = 0.0,
+    def __init__(self, sv_thresholding: SV_THRESHOLDING = 'none', theta: float = 0.0,
                  return_us: bool = False, use_rsvd: bool = False):
         self.return_us = return_us
-        self.sv_prune = sv_prune
-        self.tol = sv_tol
+        self.sv_thresholding = sv_thresholding
+        self.tol = theta
         if use_rsvd and not RSVD_AVAILABLE:
             raise ImportError("Could not import package `torch_sprsvd` required to use rSVD.")
         self.use_rsvd = use_rsvd
@@ -75,7 +75,7 @@ class ACCCompressor(VariableCompressor):
                 A=features,
                 full_matrices=False
             )
-        sv_threshold = _get_sv_threshold(sv_prune=self.sv_prune, tol=self.tol,
+        sv_threshold = _get_sv_threshold(sv_thresholding=self.sv_thresholding, tol=self.tol,
                                          singular_values=singular_values, features=features)
         rank = (singular_values >= sv_threshold).sum().item()
         k = max(min(rank, k), 1)
@@ -86,13 +86,13 @@ class ACCCompressor(VariableCompressor):
 
 class PCAPassCompressor(FixedCompressor):
 
-    def __init__(self, *, sv_prune: SV_THRESHOLDING, sv_tol: float = 0., max_dim: int = 64,
+    def __init__(self, *, sv_thresholding: SV_THRESHOLDING, theta: float = 0., max_dim: int = 64,
                  return_us: bool = False, use_rsvd: bool = False):
         self.max_dim = max_dim
-        self.sv_prune = sv_prune
-        self.tol = sv_tol
+        self.sv_thresholding = sv_thresholding
+        self.tol = theta
         self.return_us = return_us
-        self.keep_all = sv_prune == 'none'
+        self.keep_all = sv_thresholding == 'none'
         if use_rsvd and not RSVD_AVAILABLE:
             raise ImportError("Could not import package `torch_sprsvd` required to use rSVD.")
         self.use_rsvd = use_rsvd
@@ -110,7 +110,7 @@ class PCAPassCompressor(FixedCompressor):
                 A=features,
                 full_matrices=False
             )
-        sv_threshold = _get_sv_threshold(sv_prune=self.sv_prune, tol=self.tol,
+        sv_threshold = _get_sv_threshold(sv_thresholding=self.sv_thresholding, tol=self.tol,
                                          singular_values=singular_values, features=features)
         rank = (singular_values >= sv_threshold).sum().item()
         k = max(min(rank, self.max_dim), 1)
