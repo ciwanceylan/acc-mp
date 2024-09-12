@@ -19,4 +19,4 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/ciwanceylan/acc-mp"
-Issues = "https://github.com/ciwanceylan/mp/issues"
+Issues = "https://github.com/ciwanceylan/acc-mp/issues"
