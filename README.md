@@ -31,8 +31,9 @@ torch_sparse
 ```
 
 #### Optional requirements
-To run PCAPass on GPU with rSVD, please install `torch_sprsvd` (Currently under development).
-There optional packages can be installed with conda to speed up Numba.
+To run PCAPass on GPU with rSVD, please install [torch_sprsvd](https://github.com/ciwanceylan/torch-sprsvd).
+
+The following optional packages can be installed with conda to speed up Numba.
 ```
 conda install icc_rt -c numba
 conda install tbb -c conda-forge
