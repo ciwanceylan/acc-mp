@@ -13,6 +13,14 @@ except ImportError:
     warnings.warn(f"Package `torch_sprsvd` could not be imported, so rSVD is not available.")
     RSVD_AVAILABLE = False
 
+try:
+    import qmrfs.qmr_feature_selection as qmrfs
+
+    QMR_AVAILABLE = True
+except ImportError:
+    warnings.warn(f"Package `qmrfs` could not be imported, so QMR feature selection is not available.")
+    QMR_AVAILABLE = False
+
 SV_THRESHOLDING = Literal['none', 'tol', 'rtol', 'rank', 'stwhp']
 
 
@@ -27,6 +35,12 @@ class VariableCompressor(abc.ABC):
 
     @abc.abstractmethod
     def compress(self, features: torch.Tensor, k: int) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        pass
+
+class IncrementalCompressor(abc.ABC):
+
+    @abc.abstractmethod
+    def compress(self, features: torch.Tensor, num_new_dims: int) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         pass
 
 
@@ -82,6 +96,38 @@ class ACCCompressor(VariableCompressor):
         V = Vh.t()
         out = features @ V[:, :k]
         return out, Vh
+
+
+def qmr_fs_torch(features: torch.Tensor, tolerance: float):
+    selected_columns = torch.arange(features.shape[1], dtype=torch.int64, device=features.device)
+    with_variance = features.std(dim=0) > 0
+    features = features[:, with_variance]
+    selected_columns = selected_columns[with_variance]
+
+    selector = qmrfs.QMRFeatureSelector(tolerance=tolerance)
+    selected_features, columns_to_keep_mask = selector.fit_transform(features)
+    selected_columns = selected_columns[columns_to_keep_mask]
+    return selected_features, selected_columns
+
+
+class ACCQMRCompressor(IncrementalCompressor):
+
+    def __init__(self, theta: float = 0.0):
+        self.tol = theta
+        if not QMR_AVAILABLE:
+            raise ImportError("Could not import package `qmrfs` required to use QMR feature selection.")
+
+    def compress(self, new_features: torch.Tensor, old_features: Optional[torch.Tensor]) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        num_old_dims = old_features.shape[1]
+        num_new_dims = new_features.shape[1]
+        if old_features is None:
+            new_selected_features, selected_columns = qmr_fs_torch(new_features, tolerance=self.tol)
+        else:
+            combined = torch.concatenate((old_features, new_features))
+            selected_features, selected_columns = qmr_fs_torch(combined, tolerance=self.tol)
+            selected_columns = selected_columns[selected_columns > num_old_dims]
+            new_selected_features = combined[:, selected_columns]
+        return new_selected_features, selected_columns
 
 
 class PCAPassCompressor(FixedCompressor):

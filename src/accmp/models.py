@@ -5,6 +5,7 @@ import torch_sparse as tsp
 import accmp.compression as feat_prune
 from accmp.layers import ConcatMP, MsgAggStep
 from accmp.transforms import FeatureNormalization, normalize_features
+import accmp.qmr_embedding_descriptions as qmrdesc
 
 
 def vprint(s: str, verbose: bool):
@@ -130,3 +131,71 @@ class PCAPass(torch.nn.Module):
             x, components = self.acp_step(x=x, adj_ws2t_t=adj_ws2t_t, adj_wt2s=adj_wt2s)
 
         return x
+
+
+class ACCQMR(torch.nn.Module):
+    agg_step: MsgAggStep
+
+    def __init__(
+            self,
+            *,
+            use_dir_conv: bool,
+            initial_feature_standardization: FeatureNormalization,
+            mp_feature_normalization: FeatureNormalization,
+            theta: float = 0.0,
+            decomposed_layers: int = 1,
+            verbose: bool = False
+    ):
+        super().__init__()
+        self.agg_step = MsgAggStep(
+            use_dir_conv=use_dir_conv,
+            feature_normalization=mp_feature_normalization,
+            decomposed_layers=decomposed_layers
+        )
+        self.feat_norm = mp_feature_normalization
+        self.base_transform = initial_feature_standardization
+        self.compressor = feat_prune.ACCQMRCompressor(theta=theta)
+        self.verbose = verbose
+
+    def forward(
+            self,
+            x: torch.Tensor,
+            adj_ws2t_t: tsp.SparseTensor,
+            adj_wt2s: Optional[tsp.SparseTensor],
+            num_steps: int,
+            feature_names: Optional[tuple[str]] = None
+    ):
+        assert isinstance(adj_ws2t_t, tsp.SparseTensor)  # To avoid silent errors
+        assert adj_wt2s is None or isinstance(adj_wt2s, tsp.SparseTensor)  # To avoid silent errors
+        if feature_names is not None:
+            feature_descriptions = qmrdesc.QMREmbeddingDescriptor.create_from_origin_features(feature_names)
+        else:
+            feature_descriptions = None
+
+        vprint("Applying base transforms...", self.verbose)
+        x = normalize_features(x, self.base_transform)
+
+        vprint("Applying SVD to initial features...", self.verbose)
+        x, selected_columns = self.compressor.compress(new_features=x, old_features=None)
+        feature_descriptions = feature_descriptions.select(selected_columns)
+        x_new = x
+        embeddings = x
+
+        vprint("Starting message-passing...", self.verbose)
+        for step in enumerate(range(num_steps)):
+            vprint(f"Aggegation {step}...", self.verbose)
+            x_new = self.agg_step(
+                x_prop=x_new,
+                adj_ws2t_t=adj_ws2t_t,
+                adj_wt2s=adj_wt2s,
+            )
+            vprint(f"QMR {step}...", self.verbose)
+            x_new, selected_columns = self.compressor.compress(new_features=x_new, old_features=embeddings)
+            embeddings = torch.concatenate((embeddings, x_new), dim=1)
+
+            # Computing descriptions
+            new_feature_descriptions = qmrdesc.accqmr_step(feature_descriptions, selected_columns)
+            feature_descriptions = feature_descriptions + new_feature_descriptions
+
+        vprint(f"Embedding computation done!", self.verbose)
+        return embeddings, feature_descriptions

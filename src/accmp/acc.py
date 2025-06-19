@@ -75,3 +75,54 @@ def agg_compress_cat_embeddings(edge_index: np.ndarray, num_nodes: int, directed
         embeddings = embeddings.cpu().numpy()
 
     return embeddings
+
+
+@dc.dataclass(frozen=True)
+class ACCQMRParams:
+    max_steps: int
+    initial_feature_standardization: FeatureNormalization
+    mp_feature_normalization: FeatureNormalization
+    init_params: preproc.InitFeaturesWeightsParams
+    theta: float = 1e-2
+    normalized_weights: bool = True
+    decomposed_layers: int = 1
+
+
+def acc_qmr_embeddings(edge_index: np.ndarray, num_nodes: int, directed_conv: bool,
+                       params: ACCQMRParams, device: torch.device,
+                       weights: np.ndarray = None, node_attributes: np.ndarray = None,
+                       return_np: bool = True, verbose: bool = False):
+    model = aggcap_models.ACCQMR(
+        use_dir_conv=directed_conv,
+        mp_feature_normalization=params.mp_feature_normalization,
+        initial_feature_standardization=params.initial_feature_standardization,
+        theta=params.theta,
+        decomposed_layers=params.decomposed_layers,
+        verbose=verbose
+    )
+    if verbose:
+        print("Building adjacency matrices and initial embeddings...")
+
+    adj_ws2t_t, adj_wt2s, initial_features, initial_feature_names, _ = preproc.create_adj_t_weights_and_initial_states(
+        edge_index=edge_index,
+        num_nodes=num_nodes,
+        init_params=params.init_params,
+        normalized_weights=params.normalized_weights,
+        weights=weights,
+        node_attributes=node_attributes,
+        verbose=verbose
+    )
+
+    if verbose:
+        print("Calling ACC model...")
+    embeddings, feature_descriptions = model(
+        initial_features.to(device),
+        adj_ws2t_t=adj_ws2t_t.to(device),
+        adj_wt2s=adj_wt2s.to(device) if directed_conv else None,
+        num_steps=params.max_steps,
+        feature_names=initial_feature_names,
+    )
+    if return_np and isinstance(embeddings, torch.Tensor):
+        embeddings = embeddings.cpu().numpy()
+
+    return embeddings, feature_descriptions
