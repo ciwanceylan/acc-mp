@@ -167,6 +167,7 @@ class ACCQMR(torch.nn.Module):
     ):
         assert isinstance(adj_ws2t_t, tsp.SparseTensor)  # To avoid silent errors
         assert adj_wt2s is None or isinstance(adj_wt2s, tsp.SparseTensor)  # To avoid silent errors
+        directed = adj_wt2s is not None
         if feature_names is not None:
             feature_descriptions = qmrdesc.QMREmbeddingDescriptor.create_from_origin_features(feature_names)
         else:
@@ -178,6 +179,7 @@ class ACCQMR(torch.nn.Module):
         vprint("Applying SVD to initial features...", self.verbose)
         x, selected_columns = self.compressor.compress(new_features=x, old_features=None)
         feature_descriptions = feature_descriptions.select(selected_columns)
+        new_feature_descriptions = feature_descriptions
         x_new = x
         embeddings = x
 
@@ -194,7 +196,7 @@ class ACCQMR(torch.nn.Module):
             embeddings = torch.concatenate((embeddings, x_new), dim=1)
 
             # Computing descriptions
-            new_feature_descriptions = qmrdesc.accqmr_step(feature_descriptions, selected_columns)
+            new_feature_descriptions = qmrdesc.accqmr_step(new_feature_descriptions, selected_columns, directed=directed)
             feature_descriptions = feature_descriptions + new_feature_descriptions
 
         vprint(f"Embedding computation done!", self.verbose)

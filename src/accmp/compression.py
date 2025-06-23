@@ -118,15 +118,17 @@ class ACCQMRCompressor(IncrementalCompressor):
             raise ImportError("Could not import package `qmrfs` required to use QMR feature selection.")
 
     def compress(self, new_features: torch.Tensor, old_features: Optional[torch.Tensor]) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        num_old_dims = old_features.shape[1]
         num_new_dims = new_features.shape[1]
         if old_features is None:
             new_selected_features, selected_columns = qmr_fs_torch(new_features, tolerance=self.tol)
         else:
-            combined = torch.concatenate((old_features, new_features))
+            num_old_dims = old_features.shape[1]
+            combined = torch.concatenate((old_features, new_features), dim=1)
             selected_features, selected_columns = qmr_fs_torch(combined, tolerance=self.tol)
             selected_columns = selected_columns[selected_columns > num_old_dims]
             new_selected_features = combined[:, selected_columns]
+            selected_columns = selected_columns - num_old_dims  # selected_columns should be indexed for the new_features input
+            # assert torch.allclose(new_selected_features, new_features[:, selected_columns])  # Sainity check
         return new_selected_features, selected_columns
 
 

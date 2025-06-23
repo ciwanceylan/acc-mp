@@ -41,7 +41,7 @@ class QMREmbeddingDescriptor:
         return QMREmbeddingDescriptor(self.features + other.features)
 
     def select(self, selected_columns: List[int]):
-        new_features = self.features[selected_columns]
+        new_features = [self.features[i] for i in selected_columns]
         return QMREmbeddingDescriptor(new_features)
 
     def __len__(self):
@@ -65,9 +65,15 @@ def default_directed_msg_passing(features: QMREmbeddingDescriptor):
     featuresI = message_passing(features, agg='I')
     return featuresO + featuresI
 
+def default_undirected_msg_passing(features: QMREmbeddingDescriptor):
+    featuresU = message_passing(features, agg='U')
+    return featuresU
 
-def accqmr_step(start_features: QMREmbeddingDescriptor, selected_columns):
-    new_features = default_directed_msg_passing(start_features)
+
+def accqmr_step(start_features: QMREmbeddingDescriptor, selected_columns, directed: bool):
+    if directed:
+        new_features = default_directed_msg_passing(start_features)
+    else:
+        new_features = default_undirected_msg_passing(start_features)
     new_features = new_features.select(selected_columns)
-    out = start_features + new_features
-    return out
+    return new_features
