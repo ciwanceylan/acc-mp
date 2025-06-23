@@ -176,7 +176,7 @@ class ACCQMR(torch.nn.Module):
         vprint("Applying base transforms...", self.verbose)
         x = normalize_features(x, self.base_transform)
 
-        vprint("Applying SVD to initial features...", self.verbose)
+        vprint("Applying QMR to initial features...", self.verbose)
         x, selected_columns = self.compressor.compress(new_features=x, old_features=None)
         feature_descriptions = feature_descriptions.select(selected_columns)
         new_feature_descriptions = feature_descriptions
@@ -184,7 +184,7 @@ class ACCQMR(torch.nn.Module):
         embeddings = x
 
         vprint("Starting message-passing...", self.verbose)
-        for step in enumerate(range(num_steps)):
+        for step in range(num_steps):
             vprint(f"Aggegation {step}...", self.verbose)
             x_new = self.agg_step(
                 x_prop=x_new,
