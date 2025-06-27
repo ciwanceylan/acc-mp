@@ -75,3 +75,47 @@ def agg_compress_cat_embeddings(edge_index: np.ndarray, num_nodes: int, directed
         embeddings = embeddings.cpu().numpy()
 
     return embeddings
+
+
+def switch_agg_compress_cat_embeddings(edge_index: np.ndarray, num_nodes: int, num_dir_steps: int,
+                                       params: ACCParams, device: torch.device, node_attributes: np.ndarray = None,
+                                       return_np: bool = True, add_self_loops_to_sinks: bool = True,
+                                       verbose: bool = False):
+    model = aggcap_models.SwitchACC(
+        num_dir_steps=num_dir_steps,
+        max_dim=params.max_dim,
+        min_add_dim=params.min_add_dim,
+        mp_feature_normalization=params.mp_feature_normalization,
+        initial_feature_standardization=params.initial_feature_standardization,
+        return_us=params.return_us,
+        use_rsvd=params.use_rsvd,
+        sv_thresholding=params.sv_thresholding,
+        theta=params.theta,
+        decomposed_layers=params.decomposed_layers,
+        verbose=verbose
+    )
+    if verbose:
+        print("Building adjacency matrices and initial embeddings...")
+
+    adj_undir, adj_ws2t_t, adj_wt2s, initial_features = preproc.create_rw_normalized_adj_matrices(
+        edge_index=edge_index,
+        num_nodes=num_nodes,
+        init_params=params.init_params,
+        node_attributes=node_attributes,
+        add_self_loops_to_sinks=add_self_loops_to_sinks,
+        verbose=verbose
+    )
+
+    if verbose:
+        print("Calling ACC model...")
+    embeddings = model(
+        initial_features.to(device),
+        adj_undir=adj_undir.to(device),
+        adj_ws2t_t=adj_ws2t_t.to(device) if adj_ws2t_t is not None else None,
+        adj_wt2s=adj_wt2s.to(device) if adj_wt2s is not None else None,
+        num_steps=params.max_steps,
+    )
+    if return_np and isinstance(embeddings, torch.Tensor):
+        embeddings = embeddings.cpu().numpy()
+
+    return embeddings

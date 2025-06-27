@@ -71,6 +71,57 @@ def test_get_adj_and_initial_features_no_weights(graph_name: str, as_undirected:
     torch.testing.assert_close(adj_wt2s_W.to_dense(), adj_wt2s.to_dense())
 
 
+def test_rw_normalized_adj_dir():
+    dtype_np = np.float32
+    dtype_torch = torch.float32
+    as_undirected = False
+    graph = load_graph("usairport")
+    node_attr = np.random.randn(graph.num_nodes, 3).astype(dtype=dtype_np)
+
+    edge_index = graph.edges.T
+
+    init_params = preproc.InitFeaturesWeightsParams(
+        use_weights=True,
+        use_node_attributes=True,
+        as_undirected=as_undirected,
+        use_degree=True,
+        use_lcc=True,
+        use_log1p_degree=True,
+        dtype=dtype_np
+    )
+
+    adj_undir, adj_ws2t_t, adj_wt2s, initial_features_1 = preproc.create_rw_normalized_adj_matrices(
+        edge_index=edge_index,
+        num_nodes=graph.num_nodes,
+        init_params=init_params,
+        node_attributes=node_attr,
+        add_self_loops_to_sinks=True
+    )
+    torch.testing.assert_close(adj_undir.sum(dim=1), torch.ones(graph.num_nodes, dtype=dtype_torch))
+    torch.testing.assert_close(adj_ws2t_t.sum(dim=1), torch.ones(graph.num_nodes, dtype=dtype_torch))
+    torch.testing.assert_close(adj_wt2s.sum(dim=1), torch.ones(graph.num_nodes, dtype=dtype_torch))
+
+    adj_undir, adj_ws2t_t, adj_wt2s, initial_features_2 = preproc.create_rw_normalized_adj_matrices(
+        edge_index=edge_index,
+        num_nodes=graph.num_nodes,
+        init_params=init_params,
+        node_attributes=node_attr,
+        add_self_loops_to_sinks=False
+    )
+    adj_ws2t_t_old, adj_wt2s_old, initial_features_old = preproc.create_adj_t_weights_and_initial_states_no_weights(
+        edge_index=edge_index,
+        num_nodes=graph.num_nodes,
+        init_params=init_params,
+        normalized_weights=True,
+        node_attributes=node_attr
+    )
+    torch.testing.assert_close(adj_ws2t_t.to_dense().unsqueeze(-1), adj_ws2t_t_old.to_dense())
+    torch.testing.assert_close(adj_wt2s.to_dense().unsqueeze(-1), adj_wt2s_old.to_dense())
+
+    torch.testing.assert_close(initial_features_1, initial_features_old)
+    torch.testing.assert_close(initial_features_2, initial_features_old)
+
+
 def manual_dir_conv(graph, init_params, feat_norm: accmp.transforms.FeatureNormalization):
     adj_ws2t_t, adj_wt2s, initial_features, _, _ = preproc.create_adj_t_weights_and_initial_states(
         edge_index=graph.edges.T,

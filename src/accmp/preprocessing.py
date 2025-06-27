@@ -256,6 +256,50 @@ def create_adj_t_weights_and_initial_states(
     return adj_ws2t_t, adj_wt2s, initial_features, initial_feature_names, weight_names
 
 
+def _compute_initial_features(
+        edge_index: np.ndarray,
+        out_degrees: torch.Tensor,
+        in_degrees: torch.Tensor,
+        num_nodes: int,
+        init_params: InitFeaturesWeightsParams,
+        node_attributes: np.ndarray = None,
+        verbose: bool = False
+):
+    initial_features = []
+
+    if init_params.use_degree:
+        if init_params.as_undirected:
+            deg_features = out_degrees
+        else:
+            deg_features = torch.cat((out_degrees, in_degrees), dim=1)
+        initial_features.append(deg_features)
+
+    if init_params.use_log1p_degree:
+        if init_params.as_undirected:
+            log1p_deg_features = torch.log1p(out_degrees)
+        else:
+            log1p_deg_features = torch.log1p(torch.cat((out_degrees, in_degrees), dim=1))
+        initial_features.append(log1p_deg_features)
+
+    if init_params.use_lcc:
+        if verbose:
+            print("Computing LCC...")
+        lcc_features, _ = bf_core._compute_local_clustering_coefficients(
+            edge_index=edge_index,
+            num_nodes=num_nodes,
+            as_undirected=init_params.as_undirected,
+            weights=None,
+            dtype=init_params.dtype
+        )
+        initial_features.append(torch.from_numpy(lcc_features))
+
+    if node_attributes is not None:
+        initial_features.append(torch.from_numpy(node_attributes))
+
+    initial_features = torch.cat(initial_features, dim=1)
+    return initial_features
+
+
 def create_adj_t_weights_and_initial_states_no_weights(
         edge_index: np.ndarray,
         num_nodes: int,
@@ -307,39 +351,117 @@ def create_adj_t_weights_and_initial_states_no_weights(
     if verbose:
         print("Creating initial embeddings...")
 
-    initial_features = []
-
-    if init_params.use_degree:
-        if init_params.as_undirected:
-            deg_features = out_degrees
-        else:
-            deg_features = torch.cat((out_degrees, in_degrees), dim=1)
-        initial_features.append(deg_features)
-
-    if init_params.use_log1p_degree:
-        if init_params.as_undirected:
-            log1p_deg_features = torch.log1p(out_degrees)
-        else:
-            log1p_deg_features = torch.log1p(torch.cat((out_degrees, in_degrees), dim=1))
-        initial_features.append(log1p_deg_features)
-
-    if init_params.use_lcc:
-        if verbose:
-            print("Computing LCC...")
-        lcc_features, _ = bf_core._compute_local_clustering_coefficients(
-            edge_index=edge_index,
-            num_nodes=num_nodes,
-            as_undirected=init_params.as_undirected,
-            weights=None,
-            dtype=init_params.dtype
-        )
-        initial_features.append(torch.from_numpy(lcc_features))
-
-    if node_attributes is not None:
-        initial_features.append(torch.from_numpy(node_attributes))
-
-    initial_features = torch.cat(initial_features, dim=1)
+    initial_features = _compute_initial_features(
+        edge_index=edge_index,
+        num_nodes=num_nodes,
+        out_degrees=out_degrees,
+        in_degrees=in_degrees,
+        init_params=init_params,
+        node_attributes=node_attributes,
+        verbose=verbose
+    )
 
     if verbose:
         print("Initial features and adjacency matrix setup done!")
     return adj_ws2t_t, adj_wt2s, initial_features
+
+
+def add_self_loops_to_zero_deg_nodes(adj: tsp.SparseTensor, degrees: torch.Tensor):
+    if adj is None:
+        return adj
+    zero_deg_nodes = torch.nonzero(~(degrees.view(-1) > 0)).view(-1)
+    rows = zero_deg_nodes
+    cols = zero_deg_nodes
+    values = torch.ones((len(zero_deg_nodes)), dtype=adj.dtype(), device=adj.device())
+    new_diag = tsp.SparseTensor(row=rows, col=cols, value=values, sparse_sizes=tuple(adj.sizes()))
+    adj = adj + new_diag
+    return adj
+
+
+def rw_adj_normalization(adj: tsp.SparseTensor, degrees: torch.Tensor):
+    if adj is None:
+        return adj
+    adj = adj * (1. / torch.maximum(degrees.view(-1, 1), torch.ones(1, dtype=degrees.dtype)))
+    return adj
+
+
+def create_rw_normalized_adj_matrices(
+        edge_index: np.ndarray,
+        num_nodes: int,
+        init_params: InitFeaturesWeightsParams,
+        node_attributes: np.ndarray = None,
+        add_self_loops_to_sinks: bool = True,
+        verbose: bool = False
+):
+    npdtype2thdtype = {np.float16: torch.float16,
+                       np.float32: torch.float32,
+                       np.float64: torch.float64}
+    assert edge_index.shape[0] == 2
+
+    if verbose:
+        print("Removing self-loops...")
+    edge_index = edge_index[:, edge_index[0] != edge_index[1]]  # remove self-loops
+
+    if init_params.as_undirected:
+        if verbose:
+            print("Convert to undirected...")
+        edge_index = np.concatenate((edge_index, np.flip(edge_index, 0)), axis=1)
+
+    if verbose:
+        print("Removing duplicate edges...")
+    edge_index = pd.DataFrame(edge_index.T).drop_duplicates().to_numpy().T
+
+    if verbose:
+        print("Creating adjacency matrices..")
+
+    if init_params.as_undirected:
+        adj_undir = tsp.SparseTensor.from_edge_index(
+            edge_index=torch.from_numpy(edge_index),
+            edge_attr=torch.ones((edge_index.shape[1]), dtype=npdtype2thdtype[init_params.dtype]),
+            sparse_sizes=(num_nodes, num_nodes)
+        )
+        adj_wt2s = None
+        adj_ws2t_t = None
+
+    else:
+        adj_wt2s = tsp.SparseTensor.from_edge_index(
+            edge_index=torch.from_numpy(edge_index),
+            edge_attr=torch.ones((edge_index.shape[1]), dtype=npdtype2thdtype[init_params.dtype]),
+            sparse_sizes=(num_nodes, num_nodes)
+        )
+
+        adj_ws2t_t = adj_wt2s.t()
+        adj_undir = adj_wt2s + adj_ws2t_t
+
+    if verbose:
+        print("Computing degrees...")
+    in_degrees = None
+    out_degrees = None
+    if adj_ws2t_t is not None and adj_wt2s is not None:
+        in_degrees = adj_ws2t_t.sum(dim=1)
+        out_degrees = adj_wt2s.sum(dim=1)
+    degrees = adj_undir.sum(dim=1)
+
+    if add_self_loops_to_sinks:
+        adj_ws2t_t = add_self_loops_to_zero_deg_nodes(adj_ws2t_t, degrees=in_degrees)
+        adj_wt2s = add_self_loops_to_zero_deg_nodes(adj_wt2s, degrees=out_degrees)
+        adj_undir = add_self_loops_to_zero_deg_nodes(adj_undir, degrees=degrees)
+
+    adj_ws2t_t = rw_adj_normalization(adj_ws2t_t, in_degrees)
+    adj_wt2s = rw_adj_normalization(adj_wt2s, out_degrees)
+    adj_undir = rw_adj_normalization(adj_undir, degrees)
+
+    if verbose:
+        print("Creating initial embeddings...")
+
+    initial_features = _compute_initial_features(
+        edge_index=edge_index,
+        num_nodes=num_nodes,
+        out_degrees=out_degrees.view(-1, 1),
+        in_degrees=in_degrees.view(-1, 1),
+        init_params=init_params,
+        node_attributes=node_attributes,
+        verbose=verbose
+    )
+
+    return adj_undir, adj_ws2t_t, adj_wt2s, initial_features
