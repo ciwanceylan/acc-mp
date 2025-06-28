@@ -435,12 +435,14 @@ def create_rw_normalized_adj_matrices(
 
     if verbose:
         print("Computing degrees...")
-    in_degrees = None
-    out_degrees = None
+    degrees = adj_undir.sum(dim=1)
     if adj_ws2t_t is not None and adj_wt2s is not None:
         in_degrees = adj_ws2t_t.sum(dim=1)
         out_degrees = adj_wt2s.sum(dim=1)
-    degrees = adj_undir.sum(dim=1)
+    else:
+        in_degrees = degrees
+        out_degrees = degrees
+
 
     if add_self_loops_to_sinks:
         adj_ws2t_t = add_self_loops_to_zero_deg_nodes(adj_ws2t_t, degrees=in_degrees)
