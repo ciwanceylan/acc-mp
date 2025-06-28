@@ -78,7 +78,8 @@ def agg_compress_cat_embeddings(edge_index: np.ndarray, num_nodes: int, directed
 
 
 def switch_agg_compress_cat_embeddings(edge_index: np.ndarray, num_nodes: int, num_dir_steps: int,
-                                       params: ACCParams, device: torch.device, node_attributes: np.ndarray = None,
+                                       dim_factor_for_directed: int, params: ACCParams,
+                                       device: torch.device, node_attributes: np.ndarray = None,
                                        return_np: bool = True, add_self_loops_to_sinks: bool = True,
                                        verbose: bool = False):
     model = aggcap_models.SwitchACC(
@@ -87,6 +88,7 @@ def switch_agg_compress_cat_embeddings(edge_index: np.ndarray, num_nodes: int, n
         min_add_dim=params.min_add_dim,
         mp_feature_normalization=params.mp_feature_normalization,
         initial_feature_standardization=params.initial_feature_standardization,
+        dim_factor_for_directed=dim_factor_for_directed,
         return_us=params.return_us,
         use_rsvd=params.use_rsvd,
         sv_thresholding=params.sv_thresholding,

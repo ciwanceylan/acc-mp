@@ -98,6 +98,7 @@ class SwitchACC(nn.Module):
             min_add_dim: int,
             initial_feature_standardization: FeatureNormalization,
             mp_feature_normalization: FeatureNormalization,
+            dim_factor_for_directed: int = 2,
             return_us: bool = False,
             use_rsvd: bool = False,
             sv_thresholding: feat_prune.SV_THRESHOLDING,
@@ -107,6 +108,7 @@ class SwitchACC(nn.Module):
     ):
         super().__init__()
         self.num_dir_steps = num_dir_steps
+        self.dim_factor_for_directed = dim_factor_for_directed
         self.agg_step = SwitchMsgAggStep(
             feature_normalization=mp_feature_normalization,
             decomposed_layers=decomposed_layers
@@ -119,10 +121,15 @@ class SwitchACC(nn.Module):
         self.min_add_dim = min_add_dim
         self.verbose = verbose
 
-    def get_emb_dims(self, num_nodes: int, num_steps: int):
-        dim_per_step = min(max(self.max_dim // (num_steps + 1), self.min_add_dim), num_nodes)
-        dims = num_steps * [dim_per_step]
-        return dim_per_step, dims
+    def get_emb_dims(self, num_nodes: int, num_steps: int, is_undir: bool):
+        if is_undir:
+            d = min(max(self.max_dim // (num_steps + 1), self.min_add_dim), num_nodes)
+            dims = num_steps * [d]
+        else:
+            extra_dims = (self.dim_factor_for_directed - 1) * self.num_dir_steps
+            d = min(max(self.max_dim // (num_steps + extra_dims + 1), self.min_add_dim), num_nodes)
+            dims = self.num_dir_steps * [self.dim_factor_for_directed * d] +  (num_steps - self.num_dir_steps)  * [d]
+        return d, dims
 
     def forward(
             self,
@@ -136,7 +143,7 @@ class SwitchACC(nn.Module):
         # To avoid silent errors
         assert is_undir or (isinstance(adj_ws2t_t, tsp.SparseTensor) and isinstance(adj_wt2s, tsp.SparseTensor))
 
-        init_dim, emb_dims = self.get_emb_dims(num_nodes=x.shape[0], num_steps=num_steps)
+        init_dim, emb_dims = self.get_emb_dims(num_nodes=x.shape[0], num_steps=num_steps, is_undir=is_undir)
 
         vprint("Applying base transforms...", self.verbose)
         x = normalize_features(x, self.base_transform)
