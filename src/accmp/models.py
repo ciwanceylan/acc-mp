@@ -126,9 +126,11 @@ class SwitchACC(nn.Module):
             d = min(max(self.max_dim // (num_steps + 1), self.min_add_dim), num_nodes)
             dims = num_steps * [d]
         else:
-            extra_dims = (self.dim_factor_for_directed - 1) * self.num_dir_steps
+            r = min(self.num_dir_steps, num_steps)
+            r_undir = num_steps - r
+            extra_dims = (self.dim_factor_for_directed - 1) * r
             d = min(max(self.max_dim // (num_steps + extra_dims + 1), self.min_add_dim), num_nodes)
-            dims = self.num_dir_steps * [self.dim_factor_for_directed * d] +  (num_steps - self.num_dir_steps)  * [d]
+            dims = r * [self.dim_factor_for_directed * d] + r_undir * [d]
         return d, dims
 
     def forward(
