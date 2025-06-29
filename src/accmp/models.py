@@ -156,7 +156,7 @@ class SwitchACC(nn.Module):
         vprint("Starting message-passing...", self.verbose)
         for step, k in enumerate(emb_dims):
             vprint(f"Aggegation {step}...", self.verbose)
-            if step < self.num_dir_steps:
+            if step < self.num_dir_steps and not is_undir:
                 x_new = self.agg_step(
                     x_prop=x_new,
                     adj_ws2t_t=adj_ws2t_t,
