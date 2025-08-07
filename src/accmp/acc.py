@@ -102,7 +102,7 @@ def acc_qmr_embeddings(edge_index: np.ndarray, num_nodes: int, directed_conv: bo
     )
     if verbose:
         print("Building adjacency matrices and initial embeddings...")
-    
+
     adj_ws2t_t, adj_wt2s, initial_features, initial_feature_names, _ = preproc.create_adj_t_weights_and_initial_states(
         edge_index=edge_index,
         num_nodes=num_nodes,
@@ -115,17 +115,17 @@ def acc_qmr_embeddings(edge_index: np.ndarray, num_nodes: int, directed_conv: bo
 
     if verbose:
         print("Calling ACC model...")
-        
+
     embeddings, feature_descriptions = model(
         initial_features.to(device),
         adj_ws2t_t=adj_ws2t_t.to(device),
         adj_wt2s=adj_wt2s.to(device) if directed_conv else None,
         num_steps=params.max_steps,
         feature_names=initial_feature_names,
-        )
+    )
     if return_np and isinstance(embeddings, torch.Tensor):
         embeddings = embeddings.cpu().numpy()
-        
+
     return embeddings, feature_descriptions
 
 
@@ -173,4 +173,3 @@ def switch_agg_compress_cat_embeddings(edge_index: np.ndarray, num_nodes: int, n
         embeddings = embeddings.cpu().numpy()
 
     return embeddings
-
