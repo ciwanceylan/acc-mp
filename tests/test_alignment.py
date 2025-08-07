@@ -10,7 +10,6 @@ import accmp.pcapass as pcapass
 import accmp.transforms
 import accmp.preprocessing as preproc
 
-
 from tests.alignment import load_alignment_problem, eval_topk_sim
 
 USAIRPORT_ALIGNMENT_ACC_GOALS = {
@@ -138,6 +137,46 @@ def test_acc_arenas(dtype: type, noise_p: float):
         params=params,
         device=torch.device('cpu'),
         weights=None,
+        node_attributes=None
+    )
+    assert embeddings.dtype == dtype
+    embeddings = PCA(whiten=True).fit_transform(embeddings)
+
+    res = eval_topk_sim(embeddings, alignment_obj)
+    for k, v in ARENAS_ALIGNMENT_ACC_GOALS[noise_p].items():
+        assert res[k] >= v
+
+
+@pytest.mark.parametrize("dtype", [np.float64])
+@pytest.mark.parametrize("noise_p", ['0', '0.05'])
+def test_acc_arenas(dtype: type, noise_p: str):
+    seed = 4042
+
+    merged_graph, alignment_obj = load_alignment_problem("arenas", noise_p=float(noise_p), seed=seed)
+    params = acc.ACCParams(
+        max_steps=8,
+        initial_feature_standardization=accmp.transforms.FeatureNormalization(mode='std', subtract_mean=True),
+        mp_feature_normalization=accmp.transforms.FeatureNormalization(mode=None, subtract_mean=True),
+        init_params=preproc.InitFeaturesWeightsParams(
+            use_weights=False,
+            use_node_attributes=False,
+            as_undirected=True,
+            use_degree=True,
+            use_lcc=True,
+            use_log1p_degree=False,
+            dtype=dtype
+        ),
+        max_dim=64,
+        decomposed_layers=1,
+    )
+
+    embeddings = acc.switch_agg_compress_cat_embeddings(
+        num_dir_steps=0,
+        dim_factor_for_directed=1,
+        edge_index=merged_graph.edges.T,
+        num_nodes=merged_graph.num_nodes,
+        params=params,
+        device=torch.device('cpu'),
         node_attributes=None
     )
     assert embeddings.dtype == dtype

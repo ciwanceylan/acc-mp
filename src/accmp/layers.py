@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 import torch_sparse as tsp
@@ -49,6 +49,40 @@ class MsgAggStep(MessagePassing):
             )
         x_new = torch.cat(x_new, dim=1)
         return x_new
+
+
+class SwitchMsgAggStep(MessagePassing):
+
+    def __init__(self,
+                 *,
+                 feature_normalization: FeatureNormalization,
+                 decomposed_layers: int = 1
+                 ):
+        super().__init__(aggr="sum", decomposed_layers=decomposed_layers)
+        self._feature_normalization = feature_normalization
+
+    def forward(
+            self,
+            x_prop: torch.Tensor,
+            adj_ws2t_t: tsp.SparseTensor,
+            adj_wt2s: Optional[tsp.SparseTensor],
+    ) -> torch.Tensor:
+        if self._feature_normalization.before_propagate:
+            x_prop = normalize_features(x_prop, self._feature_normalization)
+
+        if adj_wt2s is not None:
+            new_x_src_dst = self.propagate(adj_ws2t_t, x=x_prop)
+            new_x_dst_src = self.propagate(adj_wt2s, x=x_prop)
+            new_x = torch.cat((new_x_src_dst, new_x_dst_src), dim=1)
+        else:
+            new_x = self.propagate(adj_ws2t_t, x=x_prop)
+
+        if self._feature_normalization.before_prune:
+            new_x = normalize_features(new_x, self._feature_normalization)
+        return new_x
+
+    def message_and_aggregate(self, adj_t: tsp.SparseTensor, x: torch.Tensor):
+        return tsp.matmul(adj_t, x, reduce=self.aggr)
 
 
 class ConcatMP(MessagePassing):
